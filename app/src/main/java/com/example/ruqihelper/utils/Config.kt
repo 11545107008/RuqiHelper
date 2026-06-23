@@ -13,11 +13,25 @@ object Config {
     // 无障碍服务是否激活
     var isServiceRunning = false
 
-    // 调试：记录最近扫描到的包名和文本
+    // 通知监听是否激活
+    var isNotificationRunning = false
+
+    // 共享冷却（防止 Accessibility 和 Notification 同时弹窗）
+    @Volatile var lastAlertTime = 0L
+    const val ALERT_COOLDOWN = 3000L
+
+    // ===== 无障碍调试 =====
     var debugPackage = ""
     var debugTexts = ""
     var debugTime = 0L
     var debugEventCount = 0L
+
+    // ===== 通知调试 =====
+    var notiPackage = ""
+    var notiTitle = ""
+    var notiText = ""
+    var notiTime = 0L
+    var notiCount = 0L
 
     // 最后错误信息
     var lastError = ""
