@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">如祺好单助手</string>
-    <string name="service_description">监听如祺司机端订单，自动识别好单并提醒司机</string>
 </resources>
