@@ -1,145 +1,127 @@
 package com.example.ruqihelper.ui
 
+import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.TextView
-
-/**
- * 悬浮窗管理器 - 好单提醒
- */
 class FloatingWindow(private val context: Context) {
 
     private var windowManager: WindowManager? = null
-    private var floatingView: View? = null
+    private var floatView: View? = null
     private var isShowing = false
 
-    /**
-     * 显示订单提醒
-     * @param price 订单金额
-     * @param distance 订单距离
-     * @param pricePerKm 每公里单价
-     * @param alertType 提醒类型：GOOD=好单(绿色), SHORT=短单(蓝色)
-     */
-    fun showOrderAlert(price: Double, distance: Double, pricePerKm: Double, alertType: String = "GOOD") {
+    fun show(title: String, message: String, isBig: Boolean, isShort: Boolean) {
+        if (isShowing) hide()
+
+        windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        // 创建悬浮窗布局
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 24, 32, 24)
+            // background: rounded rectangle
+            setBackgroundColor(
+                when {
+                    isBig && isShort -> 0xFFE91E63.toInt() // 大单+短单: 玫红
+                    isBig -> 0xFFFF5722.toInt()            // 大单: 橙色
+                    isShort -> 0xFF2196F3.toInt()          // 短单: 蓝色
+                    else -> 0xFF4CAF50.toInt()             // 普通好单: 绿色
+                }
+            )
+            gravity = Gravity.CENTER
+            minimumWidth = 500
+        }
+
+        // 标题
+        layout.addView(TextView(context).apply {
+            text = title
+            textSize = 26f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 8)
+        })
+
+        // 内容
+        layout.addView(TextView(context).apply {
+            text = message
+            textSize = 48f
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+        })
+
+        floatView = layout
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            PixelFormat.TRANSLUCENT
+        )
+
+        params.gravity = Gravity.CENTER
+        params.x = 0
+        params.y = -200
+
+        windowManager?.addView(floatView, params)
+        isShowing = true
+
         // 震动提醒
         vibrate()
 
-        // 显示悬浮窗
-        showFloatingWindow(price, distance, pricePerKm, alertType)
+        // 闪烁动画
+        startBlink(layout)
+
+        // 5秒后自动消失
+        layout.postDelayed({ hide() }, 5000)
+    }
+
+    fun hide() {
+        try {
+            if (floatView != null && windowManager != null) {
+                windowManager?.removeView(floatView)
+                floatView = null
+            }
+        } catch (_: Exception) {}
+        isShowing = false
     }
 
     private fun vibrate() {
         try {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                vibratorManager.defaultVibrator
+                vibratorManager.defaultVibrator.vibrate(
+                    VibrationEffect.createWaveform(longArrayOf(0, 300, 200, 300), -1)
+                )
             } else {
                 @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 300, 200, 300), -1))
             }
-            // 修复：vibrate方法需要正确的参数
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(500)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (_: Exception) {}
     }
 
-    private fun showFloatingWindow(price: Double, distance: Double, pricePerKm: Double, alertType: String = "GOOD") {
-        if (isShowing) {
-            updateFloatingWindow(price, distance, pricePerKm, alertType)
-            return
-        }
-
-        windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-        // 根据提醒类型设置颜色和文字
-        val (backgroundColor, title) = if (alertType == "SHORT") {
-            Pair(Color.parseColor("#CC1565C0"), "📍 短单来了！")  // 蓝色背景
-        } else {
-            Pair(Color.parseColor("#CC00AA00"), "🎉 好单来了！")  // 绿色背景
-        }
-
-        // 创建悬浮窗视图
-        floatingView = TextView(context).apply {
-            text = "$title\n金额: ${String.format("%.1f", price)}元\n距离: ${String.format("%.1f", distance)}公里\n单价: ${String.format("%.2f", pricePerKm)}元/公里"
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            setPadding(40, 40, 40, 40)
-            setBackgroundColor(backgroundColor)
-            gravity = Gravity.CENTER
-        }
-
-        // 设置悬浮窗参数
-        val params = WindowManager.LayoutParams().apply {
-            type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
-            flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-            format = PixelFormat.TRANSLUCENT
-            width = WindowManager.LayoutParams.WRAP_CONTENT
-            height = WindowManager.LayoutParams.WRAP_CONTENT
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = 100 // 距离顶部100px
-        }
-
-        // 显示悬浮窗
-        try {
-            windowManager?.addView(floatingView, params)
-            isShowing = true
-        } catch (e: Exception) {
-            Log.e("FloatingWindow", "添加悬浮窗失败，请检查悬浮窗权限", e)
-            isShowing = false
-            return
-        }
-
-        // 5秒后自动消失
-        floatingView?.postDelayed({
-            dismiss()
-        }, 5000)
-    }
-
-    private fun updateFloatingWindow(price: Double, distance: Double, pricePerKm: Double, alertType: String = "GOOD") {
-        val backgroundColor = if (alertType == "SHORT") {
-            Color.parseColor("#CC1565C0")
-        } else {
-            Color.parseColor("#CC00AA00")
-        }
-        val title = if (alertType == "SHORT") {
-            "📍 短单来了！"
-        } else {
-            "🎉 好单来了！"
-        }
-        (floatingView as? TextView)?.apply {
-            text = "$title\n金额: ${String.format("%.1f", price)}元\n距离: ${String.format("%.1f", distance)}公里\n单价: ${String.format("%.2f", pricePerKm)}元/公里"
-            setBackgroundColor(backgroundColor)
-        }
-    }
-
-    /**
-     * 关闭悬浮窗
-     */
-    fun dismiss() {
-        if (isShowing && floatingView != null) {
-            windowManager?.removeView(floatingView)
-            floatingView = null
-            isShowing = false
+    private fun startBlink(view: View) {
+        val animator = ValueAnimator.ofFloat(1f, 0.3f).apply {
+            duration = 300
+            repeatCount = 8
+            repeatMode = ValueAnimator.REVERSE
+            addUpdateListener { view.alpha = it.animatedValue as Float }
+            start()
         }
     }
 }
