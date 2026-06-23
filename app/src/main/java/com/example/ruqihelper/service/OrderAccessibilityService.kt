@@ -189,8 +189,10 @@ class OrderAccessibilityService : AccessibilityService() {
             }
         }
 
-        return if (amount != null && distance != null) {
-            PriceCalculator.calculate(amount, distance)
+        val a = amount
+        val d = distance
+        return if (a != null && d != null) {
+            PriceCalculator.calculate(a, d)
         } else null
     }
 
