@@ -64,7 +64,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
         layout.addView(TextView(this).apply {
-            text = "在无障碍设置中找到"如祺好单助手"并开启"
+            text = "在无障碍设置中找到【如祺好单助手】并开启"
             textSize = 12f
             setTextColor(0xFF757575.toInt())
             setPadding(0, 4, 0, 16)
