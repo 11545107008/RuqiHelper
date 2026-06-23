@@ -18,4 +18,8 @@ object Config {
     var debugTexts = ""
     var debugTime = 0L
     var debugEventCount = 0L
+
+    // 最后错误信息
+    var lastError = ""
+    var errorTime = 0L
 }
