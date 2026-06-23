@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="#FFF3E0">
+
+    <!-- 标题 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="如祺司机好单助手"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="32dp"
+        android:textColor="#FF6F00" />
+
+    <!-- 单价阈值设置 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="最低单价（元/公里）"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:textColor="#333333" />
+
+        <EditText
+            android:id="@+id/etMinPrice"
+            android:layout_width="100dp"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:text="1.5"
+            android:textSize="16sp"
+            android:gravity="center"
+            android:background="@android:drawable/edit_text"
+            android:padding="8dp" />
+    </LinearLayout>
+
+    <!-- 自动点击开关 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="自动点击接单（风险高）"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:textColor="#FF5722" />
+
+        <Switch
+            android:id="@+id/switchAutoClick"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- 短单提醒开关 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="32dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="短单提醒（2公里内）"
+            android:textSize="16sp"
+            android:gravity="center_vertical"
+            android:textColor="#1565C0" />
+
+        <Switch
+            android:id="@+id/switchShortDistance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true" />
+    </LinearLayout>
+
+    <!-- 权限设置区域 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="权限设置"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"
+        android:textColor="#333333" />
+
+    <!-- 无障碍权限按钮 -->
+    <Button
+        android:id="@+id/btnOpenAccessibility"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="开启无障碍服务"
+        android:textSize="16sp"
+        android:backgroundTint="#FF6F00"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 悬浮窗权限按钮 -->
+    <Button
+        android:id="@+id/btnOpenOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="开启悬浮窗权限"
+        android:textSize="16sp"
+        android:backgroundTint="#FF6F00"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 测试按钮 -->
+    <Button
+        android:id="@+id/btnTestAlert"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="测试提醒（验证功能）"
+        android:textSize="16sp"
+        android:backgroundTint="#1565C0"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="32dp" />
+
+    <!-- 使用说明 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="使用说明：\n1. 开启无障碍服务和悬浮窗权限\n2. 打开如祺司机端\n3. 等待订单弹窗，好单会自动提醒\n4. 绿色弹窗=好单，手动点击接单"
+        android:textSize="14sp"
+        android:lineSpacingExtra="4dp"
+        android:textColor="#666666"
+        android:background="#FFFFCC"
+        android:padding="16dp" />
+
+</LinearLayout>
