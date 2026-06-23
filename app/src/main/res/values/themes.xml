@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RuqiHelper" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+    <!-- 基础主题 -->
+    <style name="Theme.RuqiHelper" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#FF6F00</item>
+        <item name="colorPrimaryDark">#E65100</item>
+        <item name="colorAccent">#FF6F00</item>
+    </style>
 </resources>
