@@ -1,248 +1,178 @@
 package com.example.ruqihelper.service
 
 import android.accessibilityservice.AccessibilityService
-import android.util.Log
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.example.ruqihelper.calculator.OrderInfo
 import com.example.ruqihelper.calculator.PriceCalculator
 import com.example.ruqihelper.ui.FloatingWindow
 import com.example.ruqihelper.utils.Config
 
-/**
- * 如祺车主订单监听无障碍服务
- * 监听如祺车主APP的订单弹窗，自动识别好单并提醒司机
- *
- * 基于APK分析结果：
- * - 真实包名：com.ruqi.driver ✓
- * - 订单弹窗Activity：HalfPushActivity（半屏弹窗）
- * - 开发方：腾讯（com.tencent.gac.driver）
- */
 class OrderAccessibilityService : AccessibilityService() {
 
-    companion object {
-        private const val TAG = "OrderAccessibility"
-        private const val RUQI_PACKAGE = "com.ruqi.driver"
-
-        // 订单弹窗可能出现的Activity（通过APK分析发现）
-        private val ORDER_POPUP_KEYWORDS = listOf(
-            "HalfPush", "OrderDetails", "OrderUnderway", "OrderList", "Reserve"
-        )
-    }
-
-    private var floatingWindow: FloatingWindow? = null
-    private var lastOrderText: String = ""
-    private var lastAlertTime: Long = 0L
+    private lateinit var floatingWindow: FloatingWindow
+    private var lastAlertTime = 0L
+    private val alertCooldown = 3000L // 3绉掑喎鍗达紝闃叉閲嶅鎻愰啋
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.d(TAG, "========== 无障碍服务已连接 ==========")
-        Log.d(TAG, "监听包名: $RUQI_PACKAGE")
+        Config.isServiceRunning = true
         floatingWindow = FloatingWindow(this)
+
+        // 閰嶇疆鐩戝惉锛氱洃鍚墍鏈夊簲鐢ㄧ獥鍙ｅ彉鍖?        val info = AccessibilityServiceInfo().apply {
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+            flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    AccessibilityServiceInfo.DEFAULT
+            notificationTimeout = 300
+        }
+        serviceInfo = info
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-        val packageName = event.packageName?.toString() ?: return
-        val className = event.className?.toString() ?: ""
+        // 闄嶆俯锛氶槻姝㈤绻佸鐞?        val now = System.currentTimeMillis()
+        if (now - lastAlertTime < alertCooldown) return
 
-        // 只处理如祺车主APP的事件
-        if (packageName != RUQI_PACKAGE) return
-
-        // 判断是否是订单相关界面
-        val isOrderScreen = ORDER_POPUP_KEYWORDS.any { className.contains(it) }
-
-        // 基础日志
-        if (isOrderScreen || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            Log.d(TAG, "【事件】${AccessibilityEvent.eventTypeToString(event.eventType)}")
-            Log.d(TAG, "【类名】$className")
-        }
-
-        when (event.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                Log.d(TAG, "→ 窗口切换: $className")
-                val rootNode = getRootInActiveWindow()
-                if (rootNode != null) {
-                    checkForOrder(rootNode, className)
-                }
-            }
-
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                // 内容变化时也检查（订单弹窗动态出现时用）
-                if (isOrderScreen) {
-                    val rootNode = getRootInActiveWindow()
-                    if (rootNode != null) {
-                        checkForOrder(rootNode, className)
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * 检查是否为订单弹窗
-     */
-    private fun checkForOrder(rootNode: AccessibilityNodeInfo, className: String) {
+        val rootNode = rootInActiveWindow ?: return
         try {
-            // 收集所有文本
-            val allTexts = mutableListOf<String>()
-            traverseNode(rootNode, allTexts)
+            val order = parseOrderFromNode(rootNode)
+            if (order != null && order.isGoodOrder) {
+                lastAlertTime = now
+                val title = if (order.isBigOrder && order.isShortOrder) "馃敟 瓒呯骇濂藉崟锛?
+                           else if (order.isBigOrder) "馃挵 澶у崟鏉ヤ簡锛?
+                           else "馃搷 鐭崟鎻愰啋"
 
-            val fullText = allTexts.joinToString("\n")
-
-            // 防重复：3秒内同一内容不重复提醒
-            val now = System.currentTimeMillis()
-            if (fullText == lastOrderText && now - lastAlertTime < 3000) return
-            lastOrderText = fullText
-            lastAlertTime = now
-
-            // 打印当前界面所有文本（用于调试）
-            Log.d(TAG, "【界面文本】开始打印...")
-            allTexts.forEach { text ->
-                if (text.isNotBlank()) {
-                    Log.d(TAG, "  文字: $text")
-                }
+                val msg = "楼%.2f / %.1f鍏噷 = 楼%.2f/鍏噷".format(
+                    order.amount, order.distance, order.pricePerKm
+                )
+                floatingWindow.show(title, msg, order.isBigOrder, order.isShortOrder)
             }
-
-            // 提取金额和距离
-            var price = PriceCalculator.extractPrice(fullText)
-            var distance = PriceCalculator.extractDistance(fullText)
-
-            // 如果文本提取失败，尝试从节点直接读取
-            if (price <= 0) {
-                price = extractPriceFromNodes(rootNode)
-            }
-            if (distance <= 0) {
-                distance = extractDistanceFromNodes(rootNode)
-            }
-
-            Log.d(TAG, "【解析结果】金额=$price, 距离=$distance")
-
-            if (price > 0 && distance > 0) {
-                val pricePerKm = PriceCalculator.calculatePricePerKm(price, distance)
-
-                Log.d(TAG, "【订单信息】金额=${String.format("%.1f", price)}元, " +
-                        "距离=${String.format("%.1f", distance)}公里, " +
-                        "单价=${String.format("%.2f", pricePerKm)}元/公里")
-
-                // 判断是否为好单或短单
-                val isGoodOrder = PriceCalculator.isGoodOrder(pricePerKm, Config.MIN_PRICE_PER_KM)
-                val isShortDistance = Config.ENABLE_SHORT_DISTANCE_ALERT &&
-                        PriceCalculator.isShortDistance(distance, Config.MAX_SHORT_DISTANCE)
-
-                if (isGoodOrder || isShortDistance) {
-                    val type = when {
-                        isGoodOrder && isShortDistance -> "好单+短单"
-                        isGoodOrder -> "好单"
-                        else -> "短单"
-                    }
-                    Log.d(TAG, "【提醒】$type！")
-                    val alertType = if (isShortDistance && !isGoodOrder) "SHORT" else "GOOD"
-                    floatingWindow?.showOrderAlert(price, distance, pricePerKm, alertType)
-
-                    if (Config.ENABLE_AUTO_CLICK) {
-                        Log.d(TAG, "【自动点击】尝试接单...")
-                        autoClickAccept(rootNode)
-                    }
-                } else {
-                    Log.d(TAG, "【忽略】不是好单（单价=${String.format("%.2f", pricePerKm)}）")
-                }
-            } else {
-                Log.d(TAG, "【未识别】未能提取完整订单信息")
-                Log.d(TAG, "原始文本（前300字）: ${fullText.take(300)}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "【错误】解析订单失败: ${e.message}", e)
+        } finally {
+            rootNode.recycle()
         }
     }
 
     /**
-     * 从节点中直接读取金额
+     * 浠庣晫闈㈣妭鐐规爲涓彁鍙栬鍗曚俊鎭?     * 閫傞厤濡傜ズ杞︿富APP鐨刄I缁撴瀯
      */
-    private fun extractPriceFromNodes(node: AccessibilityNodeInfo): Double {
-        val keywords = listOf("元", "金额", "预估", "price", "Price")
-        for (keyword in keywords) {
-            val nodes = node.findAccessibilityNodeInfosByText(keyword)
-            if (nodes != null) {
-                for (n in nodes) {
-                    val text = n.text?.toString() ?: ""
-                    val desc = n.contentDescription?.toString() ?: ""
-                    val price = PriceCalculator.extractPrice(text + desc)
-                    if (price > 0) {
-                        Log.d(TAG, "【节点读取】金额=$price（来源: $keyword）")
-                        return price
-                    }
-                }
+    private fun parseOrderFromNode(root: AccessibilityNodeInfo): OrderInfo? {
+        var amount: Double? = null
+        var distance: Double? = null
+
+        // 鏂规硶1: 閫氳繃鏂囨湰鍐呭璇嗗埆閲戦锛堝寘鍚?楼"鎴?鍏?鐨勬枃鏈級
+        extractByTextSearch(root)?.let { pair ->
+            amount = pair.first
+            distance = pair.second
+        }
+
+        // 鏂规硶2: 濡傛灉鏂规硶1澶辫触锛岄€氳繃View ID鎼滅储锛堝绁虹壒鏈塈D锛?        if (amount == null || distance == null) {
+            extractByViewId(root)?.let { pair ->
+                if (amount == null) amount = pair.first
+                if (distance == null) distance = pair.second
             }
         }
-        return -1.0
+
+        if (amount != null && distance != null) {
+            return PriceCalculator.calculate(amount, distance)
+        }
+        return null
     }
 
     /**
-     * 从节点中直接读取距离
+     * 鏂规硶1: 鍏ㄦ枃鏈悳绱㈤噾棰濆拰璺濈
      */
-    private fun extractDistanceFromNodes(node: AccessibilityNodeInfo): Double {
-        val keywords = listOf("公里", "km", "距离", "distance", "Distance")
-        for (keyword in keywords) {
-            val nodes = node.findAccessibilityNodeInfosByText(keyword)
-            if (nodes != null) {
-                for (n in nodes) {
-                    val text = n.text?.toString() ?: ""
-                    val desc = n.contentDescription?.toString() ?: ""
-                    val distance = PriceCalculator.extractDistance(text + desc)
-                    if (distance > 0) {
-                        Log.d(TAG, "【节点读取】距离=$distance（来源: $keyword）")
-                        return distance
-                    }
-                }
+    private fun extractByTextSearch(root: AccessibilityNodeInfo): Pair<Double, Double>? {
+        val texts = mutableListOf<String>()
+        collectTexts(root, texts)
+
+        var amount: Double? = null
+        var distance: Double? = null
+
+        for (text in texts) {
+            // 鍖归厤閲戦: 楼XX.XX 鎴?XX鍏?鎴?棰勪及XX
+            val amountRegex = Regex("""[楼锟\s*(\d+\.?\d*)|(\d+\.?\d*)\s*鍏億棰勪及\s*(\d+\.?\d*)""")
+            amountRegex.find(text)?.let { match ->
+                val value = match.groupValues.drop(1).firstOrNull { it.isNotEmpty() }
+                value?.toDoubleOrNull()?.let { if (it > 0) amount = it }
+            }
+
+            // 鍖归厤璺濈: XX鍏噷 鎴?XXkm 鎴?XX鍗冪背
+            val distRegex = Regex("""(\d+\.?\d*)\s*(?:鍏噷|km|鍗冪背)""", RegexOption.IGNORE_CASE)
+            distRegex.find(text)?.let { match ->
+                match.groupValues[1].toDoubleOrNull()?.let { if (it > 0) distance = it }
             }
         }
-        return -1.0
+
+        return if (amount != null && distance != null) Pair(amount, distance) else null
     }
 
     /**
-     * 自动点击接单按钮
+     * 鏂规硶2: 閫氳繃濡傜ズAPP鐨刅iew ID鎻愬彇
      */
-    private fun autoClickAccept(rootNode: AccessibilityNodeInfo) {
-        try {
-            val keywords = listOf("接单", "抢单", "立即接单", "确认接单")
-            for (keyword in keywords) {
-                val nodes = rootNode.findAccessibilityNodeInfosByText(keyword)
-                if (nodes != null && nodes.isNotEmpty()) {
-                    for (n in nodes) {
-                        if (n.isClickable) {
-                            n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                            Log.d(TAG, "【自动点击】已点击: $keyword")
-                            return
-                        }
-                    }
-                }
+    private fun extractByViewId(root: AccessibilityNodeInfo): Pair<Double, Double>? {
+        var amount: Double? = null
+        var distance: Double? = null
+
+        // 鎼滅储鍖呭惈浠锋牸淇℃伅鐨勮妭鐐?        val priceIds = listOf(
+            "com.ruqi.driver:id/tv_price",
+            "com.ruqi.driver:id/tv_amount",
+            "com.ruqi.driver:id/tv_fee",
+            "com.ruqi.driver:id/tv_estimated_price",
+            "com.tencent.gac.driver:id/tv_price",
+            "com.tencent.gac.driver:id/tv_amount"
+        )
+        for (id in priceIds) {
+            root.findAccessibilityNodeInfosByViewId(id).firstOrNull()?.let { node ->
+                val text = node.text?.toString() ?: ""
+                val num = extractNumber(text)
+                if (num > 0 && amount == null) amount = num
+                node.recycle()
             }
-            Log.d(TAG, "【自动点击】未找到接单按钮")
-        } catch (e: Exception) {
-            Log.e(TAG, "【自动点击】失败: ${e.message}", e)
         }
+
+        // 鎼滅储鍖呭惈璺濈淇℃伅鐨勮妭鐐?        val distIds = listOf(
+            "com.ruqi.driver:id/tv_distance",
+            "com.ruqi.driver:id/tv_mileage",
+            "com.tencent.gac.driver:id/tv_distance",
+            "com.tencent.gac.driver:id/tv_mileage"
+        )
+        for (id in distIds) {
+            root.findAccessibilityNodeInfosByViewId(id).firstOrNull()?.let { node ->
+                val text = node.text?.toString() ?: ""
+                val num = extractNumber(text)
+                if (num > 0 && distance == null) distance = num
+                node.recycle()
+            }
+        }
+
+        return if (amount != null && distance != null) Pair(amount, distance) else null
     }
 
-    /**
-     * 遍历节点，收集所有文本
-     */
-    private fun traverseNode(node: AccessibilityNodeInfo?, result: MutableList<String>) {
-        if (node == null) return
-        node.text?.let { result.add(it.toString()) }
-        node.contentDescription?.let { result.add(it.toString()) }
+    private fun collectTexts(node: AccessibilityNodeInfo, texts: MutableList<String>) {
+        val text = node.text?.toString()
+        if (!text.isNullOrBlank()) texts.add(text)
+
         for (i in 0 until node.childCount) {
-            traverseNode(node.getChild(i), result)
+            node.getChild(i)?.let { collectTexts(it, texts) }
         }
+    }
+
+    private fun extractNumber(text: String): Double {
+        return Regex("""(\d+\.?\d*)""").find(text)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     }
 
     override fun onInterrupt() {
-        Log.e(TAG, "【中断】无障碍服务被中断")
+        Config.isServiceRunning = false
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        floatingWindow?.dismiss()
-        Log.d(TAG, "【销毁】无障碍服务已销毁")
+        Config.isServiceRunning = false
+        floatingWindow.hide()
     }
 }
