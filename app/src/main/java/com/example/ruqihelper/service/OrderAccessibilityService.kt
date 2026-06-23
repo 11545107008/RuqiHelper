@@ -52,7 +52,7 @@ class OrderAccessibilityService : AccessibilityService() {
 
             startPolling()
 
-            Log.i(TAG, "v2.3 服务已启动 - 目标: ${Config.TARGET_PACKAGE}")
+            Log.i(TAG, "v2.4 服务已启动 - 目标: ${Config.TARGET_PACKAGE}")
         }
     }
 
