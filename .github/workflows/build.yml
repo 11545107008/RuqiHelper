@@ -34,23 +34,19 @@ jobs:
         allprojects {
           buildscript {
             repositories {
-              maven { url 'https://maven.aliyun.com/repository/public' }
+              google()
               maven { url 'https://maven.aliyun.com/repository/google' }
+              mavenCentral()
               maven { url 'https://maven.aliyun.com/repository/central' }
               maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
-              maven { url 'https://maven.aliyun.com/repository/jcenter' }
-              google()
-              mavenCentral()
               gradlePluginPortal()
             }
           }
           repositories {
-            maven { url 'https://maven.aliyun.com/repository/public' }
-            maven { url 'https://maven.aliyun.com/repository/google' }
-            maven { url 'https://maven.aliyun.com/repository/central' }
-            maven { url 'https://maven.aliyun.com/repository/jcenter' }
             google()
+            maven { url 'https://maven.aliyun.com/repository/google' }
             mavenCentral()
+            maven { url 'https://maven.aliyun.com/repository/central' }
           }
         }
         GRADLEEOF
