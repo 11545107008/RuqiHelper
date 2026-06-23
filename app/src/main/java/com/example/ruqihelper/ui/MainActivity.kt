@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
 
         // 标题
         layout.addView(TextView(this).apply {
-            text = "如祺好单助手"
+            text = "如祺好单助手 v2.3"
             textSize = 28f
             setTextColor(0xFF212121.toInt())
             setPadding(0, 0, 0, 8)
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         layout.addView(TextView(this).apply {
-            text = "• 大单：每公里单价 ≥ ¥${Config.MIN_PRICE_PER_KM}\n• 短单：距离 ≤ ${Config.MAX_SHORT_DISTANCE}公里\n• 满足任一条件即弹窗+震动提醒"
+            text = "• 大单：每公里单价 >= ¥${Config.MIN_PRICE_PER_KM}\n• 短单：距离 <= ${Config.MAX_SHORT_DISTANCE}公里\n• 满足任一条件即弹窗+震动提醒"
             textSize = 14f
             setTextColor(0xFF424242.toInt())
         })
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
 
         // 使用说明
         layout.addView(TextView(this).apply {
-            text = "\n使用说明："
+            text = "\n使用步骤："
             textSize = 14f
             setTextColor(0xFF212121.toInt())
             setPadding(0, 16, 0, 8)
@@ -169,10 +169,17 @@ class MainActivity : AppCompatActivity() {
         val timeStr = if (Config.debugTime > 0) {
             SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(Config.debugTime))
         } else "无"
+        val errStr = if (Config.errorTime > 0) {
+            val et = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(Config.errorTime))
+            "\n错误: ${Config.lastError} ($et)"
+        } else ""
+
         debugText.text = buildString {
             append("扫描时间: $timeStr\n")
+            append("事件计数: ${Config.debugEventCount}\n")
             append("应用包名: ${Config.debugPackage.ifEmpty { "无" }}\n")
             append("最近文本: ${Config.debugTexts.ifEmpty { "无" }}")
+            append(errStr)
         }
     }
 }
