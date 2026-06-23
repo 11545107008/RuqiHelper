@@ -19,13 +19,46 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v3
-      with:
-        gradle-version: "7.6"
+    - name: Download Gradle
+      run: |
+        echo "Downloading Gradle 7.6 from Tencent mirror..."
+        curl -sL "https://mirrors.cloud.tencent.com/gradle/gradle-7.6-bin.zip" -o /tmp/gradle.zip
+        unzip -q /tmp/gradle.zip -d /opt/
+        echo "/opt/gradle-7.6/bin" >> $GITHUB_PATH
+        /opt/gradle-7.6/bin/gradle --version
 
-    - name: Build with Gradle
-      run: gradle assembleDebug
+    - name: Create init script
+      run: |
+        mkdir -p ~/.gradle
+        cat > ~/.gradle/init.gradle << 'GRADLEEOF'
+        allprojects {
+          buildscript {
+            repositories {
+              maven { url 'https://maven.aliyun.com/repository/public' }
+              maven { url 'https://maven.aliyun.com/repository/google' }
+              maven { url 'https://maven.aliyun.com/repository/central' }
+              maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+              maven { url 'https://maven.aliyun.com/repository/jcenter' }
+              google()
+              mavenCentral()
+              gradlePluginPortal()
+            }
+          }
+          repositories {
+            maven { url 'https://maven.aliyun.com/repository/public' }
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            maven { url 'https://maven.aliyun.com/repository/jcenter' }
+            google()
+            mavenCentral()
+          }
+        }
+        GRADLEEOF
+
+    - name: Build APK
+      run: |
+        export ANDROID_HOME=$ANDROID_SDK_ROOT
+        gradle assembleDebug --no-daemon --stacktrace -Dorg.gradle.jvmargs="-Xmx2048m"
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
