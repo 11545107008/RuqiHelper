@@ -7,6 +7,9 @@ object Config {
     // 短单判断：距离 <= 此值（公里）
     const val MAX_SHORT_DISTANCE = 2.0
 
+    // 如祺车主包名
+    const val TARGET_PACKAGE = "com.ruqi.driver"
+
     // 无障碍服务是否激活
     var isServiceRunning = false
 
@@ -14,4 +17,5 @@ object Config {
     var debugPackage = ""
     var debugTexts = ""
     var debugTime = 0L
+    var debugEventCount = 0L
 }
