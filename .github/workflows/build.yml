@@ -19,26 +19,13 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
-    - name: Setup Gradle Wrapper
-      run: |
-        if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
-          cd /tmp
-          wget -q https://services.gradle.org/distributions/gradle-8.0-bin.zip
-          unzip -q gradle-8.0-bin.zip
-          cd gradle-8.0/lib
-          jar xf gradle-wrapper-*.jar
-          cd /tmp
-          cp -r gradle-8.0/lib/org gradle_temp/
-          cd gradle_temp
-          jar cf $GITHUB_WORKSPACE/gradle/wrapper/gradle-wrapper.jar .
-          echo "Gradle wrapper jar created"
-        fi
-
-    - name: Grant execute permission
-      run: chmod +x gradlew
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v3
+      with:
+        gradle-version: "8.0"
 
     - name: Build with Gradle
-      run: ./gradlew assembleDebug
+      run: gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
