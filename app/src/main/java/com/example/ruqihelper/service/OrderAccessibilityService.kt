@@ -15,8 +15,6 @@ import com.example.ruqihelper.utils.Config
 class OrderAccessibilityService : AccessibilityService() {
 
     private lateinit var floatingWindow: FloatingWindow
-    private var lastAlertTime = 0L
-    private val alertCooldown = 3000L
     private val handler = Handler(Looper.getMainLooper())
     private val pollRunnable = Runnable { safeCall { pollWindows() } }
     private var isPolling = false
@@ -296,9 +294,9 @@ class OrderAccessibilityService : AccessibilityService() {
     private fun processOrder(order: OrderInfo?, now: Long) {
         if (order == null) return
         if (!order.isGoodOrder) return
-        if (now - lastAlertTime < alertCooldown) return
+        if (now - Config.lastAlertTime < Config.ALERT_COOLDOWN) return
 
-        lastAlertTime = now
+        Config.lastAlertTime = now
         val title = when {
             order.isBigOrder && order.isShortOrder -> "超级好单!"
             order.isBigOrder -> "大单来了!"
