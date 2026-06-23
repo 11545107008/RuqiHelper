@@ -1,135 +1,133 @@
 package com.example.ruqihelper.ui
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
 import android.widget.Button
-import android.widget.EditText
-import android.widget.Switch
-import android.widget.Toast
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import com.example.ruqihelper.R
+import com.example.ruqihelper.utils.Config
 
-/**
- * 主设置界面
- */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var etMinPrice: EditText
-    private lateinit var switchAutoClick: Switch
-    private lateinit var switchShortDistance: Switch
-    private lateinit var btnOpenAccessibility: Button
-    private lateinit var btnOpenOverlay: Button
-    private lateinit var btnTestAlert: Button
-    private lateinit var floatingWindow: FloatingWindow
+    private lateinit var statusText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        floatingWindow = FloatingWindow(this)
-        initViews()
-        setupListeners()
-        checkPermissions()
+        setContentView(createLayout())
     }
 
-    private fun initViews() {
-        etMinPrice = findViewById(R.id.etMinPrice)
-        switchAutoClick = findViewById(R.id.switchAutoClick)
-        switchShortDistance = findViewById(R.id.switchShortDistance)
-        btnOpenAccessibility = findViewById(R.id.btnOpenAccessibility)
-        btnOpenOverlay = findViewById(R.id.btnOpenOverlay)
-        btnTestAlert = findViewById(R.id.btnTestAlert)
-
-        // 设置默认值
-        etMinPrice.setText(Config.MIN_PRICE_PER_KM.toString())
-        switchAutoClick.isChecked = Config.ENABLE_AUTO_CLICK
-        switchShortDistance.isChecked = Config.ENABLE_SHORT_DISTANCE_ALERT
+    override fun onResume() {
+        super.onResume()
+        updateStatus()
     }
 
-    private fun setupListeners() {
-        // 保存单价阈值
-        etMinPrice.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                val value = etMinPrice.text.toString().toDoubleOrNull()
-                if (value != null && value > 0) {
-                    // 这里应该保存到SharedPreferences，简化处理直接提示
-                    Toast.makeText(this, "单价阈值已设置为: ${value}元/公里", Toast.LENGTH_SHORT).show()
+    private fun createLayout(): ScrollView {
+        val scrollView = ScrollView(this)
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 60, 40, 40)
+        }
+
+        // 标题
+        layout.addView(TextView(this).apply {
+            text = "如祺好单助手"
+            textSize = 28f
+            setTextColor(0xFF212121.toInt())
+            setPadding(0, 0, 0, 8)
+        })
+
+        layout.addView(TextView(this).apply {
+            text = "自动识别如祺订单，大单/短单震动+弹窗提醒"
+            textSize = 14f
+            setTextColor(0xFF757575.toInt())
+            setPadding(0, 0, 0, 32)
+        })
+
+        // 状态
+        statusText = TextView(this).apply {
+            textSize = 18f
+            setPadding(0, 0, 0, 24)
+        }
+        layout.addView(statusText)
+
+        // 开启无障碍服务按钮
+        layout.addView(Button(this).apply {
+            text = "开启无障碍服务"
+            textSize = 16f
+            setOnClickListener {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        })
+        layout.addView(TextView(this).apply {
+            text = "在无障碍设置中找到"如祺好单助手"并开启"
+            textSize = 12f
+            setTextColor(0xFF757575.toInt())
+            setPadding(0, 4, 0, 16)
+        })
+
+        // 悬浮窗权限按钮
+        layout.addView(Button(this).apply {
+            text = "开启悬浮窗权限"
+            textSize = 16f
+            setOnClickListener {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
                 }
             }
-        }
+        })
 
-        // 自动点击开关
-        switchAutoClick.setOnCheckedChangeListener { _, isChecked ->
-            val tip = if (isChecked) "已开启自动点击（风险高，可能被封号）" else "已关闭自动点击"
-            Toast.makeText(this, tip, Toast.LENGTH_LONG).show()
-        }
+        // 配置说明
+        layout.addView(TextView(this).apply {
+            text = "\n提醒规则："
+            textSize = 14f
+            setTextColor(0xFF212121.toInt())
+            setPadding(0, 24, 0, 8)
+        })
 
-        // 短单提醒开关
-        switchShortDistance.setOnCheckedChangeListener { _, isChecked ->
-            val tip = if (isChecked) "已开启短单提醒（2公里内）" else "已关闭短单提醒"
-            Toast.makeText(this, tip, Toast.LENGTH_SHORT).show()
-        }
+        layout.addView(TextView(this).apply {
+            text = "• 大单：每公里单价 ≥ ¥${Config.MIN_PRICE_PER_KM}\n• 短单：距离 ≤ ${Config.MAX_SHORT_DISTANCE}公里\n• 满足任一条件即弹窗+震动提醒"
+            textSize = 14f
+            setTextColor(0xFF424242.toInt())
+            lineHeight = 28
+        })
 
-        // 打开无障碍设置
-        btnOpenAccessibility.setOnClickListener {
-            openAccessibilitySettings()
-        }
+        // 使用说明
+        layout.addView(TextView(this).apply {
+            text = "\n使用步骤："
+            textSize = 14f
+            setTextColor(0xFF212121.toInt())
+            setPadding(0, 16, 0, 8)
+        })
 
-        // 打开悬浮窗权限设置
-        btnOpenOverlay.setOnClickListener {
-            openOverlaySettings()
-        }
+        layout.addView(TextView(this).apply {
+            text = "1. 开启本应用的无障碍服务和悬浮窗权限\n2. 打开如祺车主APP正常接单\n3. 收到订单时自动判断\n4. 大单/短单自动弹窗+震动提醒\n5. 5秒后自动消失，不挡操作"
+            textSize = 14f
+            setTextColor(0xFF424242.toInt())
+            lineHeight = 28
+        })
 
-        // 测试提醒按钮
-        btnTestAlert.setOnClickListener {
-            // 测试好单提醒
-            floatingWindow?.showOrderAlert(25.5, 15.0, 1.7, "GOOD")
-            Toast.makeText(this, "已触发测试提醒，查看屏幕顶部", Toast.LENGTH_SHORT).show()
-        }
+        layout.addView(TextView(this).apply {
+            text = "\n💡 提示：如遇到不提醒的情况，可以在无障碍设置中关闭后重新开启本服务。"
+            textSize = 12f
+            setTextColor(0xFF9E9E9E.toInt())
+        })
+
+        scrollView.addView(layout)
+        return scrollView
     }
 
-    private fun checkPermissions() {
-        // 检查无障碍服务是否开启
-        if (!isAccessibilityServiceEnabled()) {
-            Toast.makeText(this, "请开启无障碍服务", Toast.LENGTH_LONG).show()
-        }
-
-        // 检查悬浮窗权限
-        if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "请开启悬浮窗权限", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val accessibilityServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        )
-        if (accessibilityServices.isNullOrEmpty()) return false
-
-        // 格式是 "package1/service1:package2/service2:..."
-        val services = accessibilityServices.split(":")
-        return services.any { it.contains("com.example.ruqihelper") }
-    }
-
-    private fun openAccessibilitySettings() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        startActivity(intent)
-        Toast.makeText(this, "请找到"如祺助手"并开启", Toast.LENGTH_LONG).show()
-    }
-
-    private fun openOverlaySettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
-        }
+    private fun updateStatus() {
+        val running = Config.isServiceRunning
+        statusText.text = if (running) "● 服务运行中" else "○ 服务未启动"
+        statusText.setTextColor(if (running) 0xFF4CAF50.toInt() else 0xFFFF5722.toInt())
     }
 }
