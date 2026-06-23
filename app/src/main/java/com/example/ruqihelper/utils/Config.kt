@@ -9,4 +9,9 @@ object Config {
 
     // 无障碍服务是否激活
     var isServiceRunning = false
+
+    // 调试：记录最近扫描到的包名和文本
+    var debugPackage = ""
+    var debugTexts = ""
+    var debugTime = 0L
 }
