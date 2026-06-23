@@ -54,14 +54,14 @@ class MainActivity : AppCompatActivity() {
 
         // 标题
         layout.addView(TextView(this).apply {
-            text = "如祺好单助手 v2.3"
+            text = "如祺好单助手 v2.4"
             textSize = 28f
             setTextColor(0xFF212121.toInt())
             setPadding(0, 0, 0, 8)
         })
 
         layout.addView(TextView(this).apply {
-            text = "自动识别如祺订单，大单/短单震动+弹窗提醒"
+            text = "自动识别如祺订单，大单/短单震动+弹窗提醒\n支持界面扫描 + 通知监听，双重覆盖"
             textSize = 14f
             setTextColor(0xFF757575.toInt())
             setPadding(0, 0, 0, 32)
@@ -84,6 +84,21 @@ class MainActivity : AppCompatActivity() {
         })
         layout.addView(TextView(this).apply {
             text = "在无障碍设置中找到【如祺好单助手】并开启"
+            textSize = 12f
+            setTextColor(0xFF757575.toInt())
+            setPadding(0, 4, 0, 16)
+        })
+
+        // 开启通知使用权按钮
+        layout.addView(Button(this).apply {
+            text = "开启通知使用权"
+            textSize = 16f
+            setOnClickListener {
+                startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+            }
+        })
+        layout.addView(TextView(this).apply {
+            text = "在通知使用权中找到【如祺好单助手】并开启\n（关键！订单通知必须靠这个抓）"
             textSize = 12f
             setTextColor(0xFF757575.toInt())
             setPadding(0, 4, 0, 16)
@@ -135,50 +150,47 @@ class MainActivity : AppCompatActivity() {
         }
         layout.addView(debugText)
 
-        // 使用说明
-        layout.addView(TextView(this).apply {
-            text = "\n使用步骤："
-            textSize = 14f
-            setTextColor(0xFF212121.toInt())
-            setPadding(0, 16, 0, 8)
-        })
-
-        layout.addView(TextView(this).apply {
-            text = "1. 开启本应用的无障碍服务和悬浮窗权限\n2. 打开如祺车主APP正常接单\n3. 收到订单时自动判断\n4. 大单/短单自动弹窗+震动提醒\n5. 如果没反应，查看下方调试信息"
-            textSize = 14f
-            setTextColor(0xFF424242.toInt())
-        })
-
-        layout.addView(TextView(this).apply {
-            text = "\n如遇到不提醒：查看调试信息中的包名和文本，截图发给开发者调整。"
-            textSize = 12f
-            setTextColor(0xFF9E9E9E.toInt())
-        })
-
         scrollView.addView(layout)
         return scrollView
     }
 
     private fun updateStatus() {
-        val running = Config.isServiceRunning
-        statusText.text = if (running) "● 服务运行中" else "○ 服务未启动"
-        statusText.setTextColor(if (running) 0xFF4CAF50.toInt() else 0xFFFF5722.toInt())
+        val asRunning = Config.isServiceRunning
+        val notiRunning = Config.isNotificationRunning
+        val statusStr = buildString {
+            append(if (asRunning) "● 无障碍:运行中" else "○ 无障碍:未启动")
+            append("\n")
+            append(if (notiRunning) "● 通知监听:运行中" else "○ 通知监听:未启动")
+        }
+        statusText.text = statusStr
+        statusText.setTextColor(
+            if (asRunning || notiRunning) 0xFF4CAF50.toInt() else 0xFFFF5722.toInt()
+        )
     }
 
     private fun updateDebug() {
-        val timeStr = if (Config.debugTime > 0) {
-            SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(Config.debugTime))
-        } else "无"
+        val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+        val asTimeStr = if (Config.debugTime > 0) fmt.format(Date(Config.debugTime)) else "无"
+        val notiTimeStr = if (Config.notiTime > 0) fmt.format(Date(Config.notiTime)) else "无"
+
         val errStr = if (Config.errorTime > 0) {
-            val et = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(Config.errorTime))
+            val et = fmt.format(Date(Config.errorTime))
             "\n错误: ${Config.lastError} ($et)"
         } else ""
 
         debugText.text = buildString {
-            append("扫描时间: $timeStr\n")
-            append("事件计数: ${Config.debugEventCount}\n")
-            append("应用包名: ${Config.debugPackage.ifEmpty { "无" }}\n")
-            append("最近文本: ${Config.debugTexts.ifEmpty { "无" }}")
+            append("[无障碍扫描]\n")
+            append("  最后扫描: $asTimeStr\n")
+            append("  事件计数: ${Config.debugEventCount}\n")
+            append("  包名: ${Config.debugPackage.ifEmpty { "无" }}\n")
+            append("  文本: ${Config.debugTexts.ifEmpty { "无" }}\n")
+            append("\n[通知监听]\n")
+            append("  最后通知: $notiTimeStr\n")
+            append("  通知计数: ${Config.notiCount}\n")
+            append("  包名: ${Config.notiPackage.ifEmpty { "无" }}\n")
+            append("  标题: ${Config.notiTitle.ifEmpty { "无" }}\n")
+            append("  内容: ${Config.notiText.ifEmpty { "无" }}")
             append(errStr)
         }
     }
