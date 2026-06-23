@@ -2,12 +2,10 @@ package com.example.ruqihelper.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
 import com.example.ruqihelper.calculator.OrderInfo
 import com.example.ruqihelper.calculator.PriceCalculator
@@ -30,26 +28,32 @@ class OrderAccessibilityService : AccessibilityService() {
         floatingWindow = FloatingWindow(this)
 
         val info = AccessibilityServiceInfo().apply {
-            // 监听所有事件类型
-            eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+            // 监听关键事件类型（不用TYPES_ALL_MASK避免过度回调）
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                    AccessibilityEvent.TYPE_WINDOWS_CHANGED or
+                    AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED or
+                    AccessibilityEvent.TYPE_VIEW_CLICKED or
+                    AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
 
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
 
-            // 关键flags
+            // 关键flags — 注意：NOT include FLAG_REQUEST_TOUCH_EXPLORATION_MODE
+            // 那个会导致触摸变成"探索模式"（双击才点击），严重影响手机正常使用
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                    AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE or
                     AccessibilityServiceInfo.DEFAULT
 
-            notificationTimeout = 100
+            // 500ms超时，避免过于频繁
+            notificationTimeout = 500
         }
         serviceInfo = info
 
         // 启动轮询扫描（每2秒主动扫描）
         startPolling()
 
-        Toast.makeText(this, "如祺好单助手已启动 v2.1\n目标: ${Config.TARGET_PACKAGE}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "如祺好单助手 v2.2\n目标: ${Config.TARGET_PACKAGE}", Toast.LENGTH_SHORT).show()
     }
 
     private fun startPolling() {
@@ -85,7 +89,6 @@ class OrderAccessibilityService : AccessibilityService() {
         if (pkg.startsWith("com.example.ruqihelper") || pkg.startsWith("com.android.systemui")) return
 
         try {
-            // 更新调试信息
             Config.debugPackage = "$pkg (evt:${event.eventType})"
 
             // 扫描所有窗口
@@ -95,7 +98,7 @@ class OrderAccessibilityService : AccessibilityService() {
             val root = rootInActiveWindow ?: return
             try {
                 val texts = mutableListOf<String>()
-                deepCollectTexts(root, texts, 0, 50) // 最多50层深度
+                deepCollectTexts(root, texts, 0, 50)
                 Config.debugTexts = texts.take(30).joinToString(" | ")
 
                 val order = parseOrderFromTexts(texts, root)
@@ -103,35 +106,31 @@ class OrderAccessibilityService : AccessibilityService() {
             } finally {
                 root.recycle()
             }
-        } catch (e: Exception) {
-            // 忽略异常
-        }
+        } catch (_: Exception) {}
     }
 
     private fun scanAllWindows(debugMode: Boolean) {
         try {
-            val windows = windows ?: return
-            if (windows.isEmpty()) return
+            val wins = windows ?: return
+            if (wins.isEmpty()) return
 
             val allTexts = mutableListOf<String>()
             var foundTarget = false
 
-            for (i in 0 until windows.size) {
-                val window = windows[i] ?: continue
+            for (i in 0 until wins.size) {
+                val window = wins[i] ?: continue
                 val root = window.root ?: continue
                 try {
-                    // 检查是否是目标APP的窗口
                     val rootPkg = root.packageName?.toString() ?: ""
-                    if (rootPkg == Config.TARGET_PACKAGE || 
-                        (debugMode && !rootPkg.isNullOrBlank() && rootPkg != "com.example.ruqihelper")) {
+                    if (rootPkg == Config.TARGET_PACKAGE ||
+                        (debugMode && rootPkg.isNotEmpty() && rootPkg != "com.example.ruqihelper")) {
                         foundTarget = true
                         if (debugMode) {
-                            Config.debugPackage = "$rootPkg 【找到了! 窗口$i】"
+                            Config.debugPackage = "$rootPkg [窗口$i]"
                         }
                     }
-
                     deepCollectTexts(root, allTexts, 0, 30)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                 } finally {
                     root.recycle()
                 }
@@ -141,9 +140,7 @@ class OrderAccessibilityService : AccessibilityService() {
                 Config.debugTexts = allTexts.take(30).joinToString(" | ")
                 Config.debugTime = System.currentTimeMillis()
             }
-        } catch (e: Exception) {
-            // 忽略
-        }
+        } catch (_: Exception) {}
     }
 
     private fun handleNotificationEvent(event: AccessibilityEvent, now: Long) {
@@ -181,64 +178,58 @@ class OrderAccessibilityService : AccessibilityService() {
     private fun parseOrderFromTexts(texts: List<String>, rootNode: AccessibilityNodeInfo?): OrderInfo? {
         var amount: Double? = null
         var distance: Double? = null
-        var pickupDistance: Double? = null
 
-        // 策略1：文本正则匹配（针对如祺实际格式优化）
         for (text in texts) {
             val cleaned = text.trim()
+            if (cleaned.isEmpty()) continue
 
             if (amount == null) {
-                // 如祺格式: "7.90元", "预估计价：7.90元", "¥7.90"
-                val r1 = Regex("""(?:预估计价|预估|金额|价格|计费|费用|收入)?[：:]\s*(\d+\.?\d*)\s*元?""")
-                val r2 = Regex("""[¥￥]?\s*(\d+\.\d{2})\s*元?""")
-                val r3 = Regex("""(\d+\.?\d*)\s*元""")
-
-                r1.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let { 
-                    if (it >= 0.5) amount = it 
+                // r1: 关键词+冒号前缀格式: "预估计价：7.90元"
+                // 注意：冒号前部分可选，冒号后部分必须
+                val r1 = Regex("""(?:预估计价|预估|金额|价格|计费|费用|收入)?[：:]\s*(\d+\.?\d+)\s*元?""")
+                r1.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it >= 0.5) amount = it }
                 }
-                if (amount == null) {
-                    r2.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                        if (it >= 0.5) amount = it
-                    }
+            }
+            if (amount == null) {
+                // r2: ¥符号前缀: "¥7.90" or "¥12.50"
+                val r2 = Regex("""[¥￥]\s*(\d+\.?\d+)\s*元?""")
+                r2.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it >= 0.5) amount = it }
                 }
-                if (amount == null) {
-                    r3.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                        if (it >= 0.5) amount = it
-                    }
+            }
+            if (amount == null) {
+                // r3: "数字+元" 格式（最通用）: "7.90元", "12.5元"
+                val r3 = Regex("""(\d+\.?\d+)\s*元""")
+                r3.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it >= 0.5) amount = it }
                 }
             }
 
             if (distance == null) {
-                // 如祺格式: "全程：3.77公里", "3.77公里", "3.77km"
-                val d1 = Regex("""(?:全程|里程|距离)[：:]\s*(\d+\.?\d*)\s*(?:公里|千米|km)""", RegexOption.IGNORE_CASE)
-                val d2 = Regex("""(\d+\.?\d*)\s*公里""")
-                val d3 = Regex("""(\d+\.?\d*)\s*(?:km|KM)""")
-
-                d1.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                    if (it in 0.1..200.0) distance = it
-                }
-                if (distance == null) {
-                    d2.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                        if (it in 0.1..200.0) distance = it
-                    }
-                }
-                if (distance == null) {
-                    d3.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                        if (it in 0.1..200.0) distance = it
-                    }
+                // d1: 关键词前缀: "全程：3.77公里"
+                val d1 = Regex("""(?:全程|里程|距离)[：:]\s*(\d+\.?\d+)\s*(?:公里|千米|km)""", RegexOption.IGNORE_CASE)
+                d1.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it in 0.1..200.0) distance = it }
                 }
             }
-
-            // 顺便提取接驾距离
-            if (pickupDistance == null) {
-                val pd = Regex("""距您[：:]?\s*(\d+\.?\d*)\s*(?:公里|km)""", RegexOption.IGNORE_CASE)
-                pd.find(cleaned)?.groups?.get(1)?.value?.toDoubleOrNull()?.let {
-                    pickupDistance = it
+            if (distance == null) {
+                // d2: "数字+公里": "3.77公里"
+                val d2 = Regex("""(\d+\.?\d+)\s*公里""")
+                d2.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it in 0.1..200.0) distance = it }
+                }
+            }
+            if (distance == null) {
+                // d3: "数字+km": "3.77km"
+                val d3 = Regex("""(\d+\.?\d+)\s*(?:km|KM)""")
+                d3.find(cleaned)?.let { m ->
+                    m.groupValues[1].toDoubleOrNull()?.let { if (it in 0.1..200.0) distance = it }
                 }
             }
         }
 
-        // 策略2：View ID精确匹配
+        // View ID精确匹配（备选）
         if ((amount == null || distance == null) && rootNode != null) {
             amount = amount ?: findInViewById(rootNode, listOf(
                 "com.ruqi.driver:id/tv_price",
@@ -274,13 +265,11 @@ class OrderAccessibilityService : AccessibilityService() {
                 val nodes = root.findAccessibilityNodeInfosByViewId(id)
                 for (node in nodes) {
                     val t = node.text?.toString() ?: ""
-                    val n = Regex("""(\d+\.?\d*)""").find(t)?.groups?.get(1)?.value?.toDoubleOrNull()
+                    val n = Regex("""(\d+\.?\d+)""").find(t)?.groupValues?.get(1)?.toDoubleOrNull()
                     node.recycle()
                     if (n != null && n >= minVal) return n
                 }
-            } catch (e: Exception) {
-                // view id not found
-            }
+            } catch (_: Exception) {}
         }
         return null
     }
@@ -295,24 +284,23 @@ class OrderAccessibilityService : AccessibilityService() {
 
         try {
             val text = node.text?.toString()?.trim()
-            if (!text.isNullOrBlank() && text.length > 1) {
+            if (!text.isNullOrBlank() && text.length >= 1) {
                 texts.add(text)
             }
-            // 也提取contentDescription
             val cd = node.contentDescription?.toString()?.trim()
-            if (!cd.isNullOrBlank() && cd.length > 1 && cd != text) {
+            if (!cd.isNullOrBlank() && cd.length >= 1 && cd != text) {
                 texts.add(cd)
             }
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
 
         try {
             val count = node.childCount
             for (i in 0 until count) {
                 val child = node.getChild(i) ?: continue
                 deepCollectTexts(child, texts, depth + 1, maxDepth)
-                try { child.recycle() } catch (e: Exception) {}
+                try { child.recycle() } catch (_: Exception) {}
             }
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
 
     override fun onInterrupt() {
